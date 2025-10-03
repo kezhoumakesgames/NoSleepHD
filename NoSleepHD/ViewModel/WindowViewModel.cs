@@ -15,6 +15,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
+using System.Linq;
 
 namespace NoSleepHD.ViewModel
 {
@@ -50,8 +51,11 @@ namespace NoSleepHD.ViewModel
 		private static extern DriveType GetDriveType(string lpRootPathName);
 		#endregion
 
-		public ObservableCollection<DiskModel> DiskLists { get; }
-			= new ObservableCollection<DiskModel>();
+		public ObservableCollection<DiskModel> NormalDisks { get; } = new();
+		public ObservableCollection<DiskModel> MountedDisks { get; } = new();
+
+		[ObservableProperty]
+		private bool hasMountedDisks;
 
 		[ObservableProperty]
 		private bool isStarted;
@@ -277,45 +281,45 @@ namespace NoSleepHD.ViewModel
 		/// </summary>
 		private void LoadSSD()
 		{
-			DiskLists.Clear();
+			var normalDisksTemp = new List<DiskModel>();
+			var mountedDisksTemp = new List<DiskModel>();
+
 			var volumeName = new StringBuilder(MAX_PATH);
 			IntPtr findHandle = FindFirstVolume(volumeName, MAX_PATH);
 
-			if (findHandle == new IntPtr(-1))
-			{
-				// Could show an error message if needed
-				return;
-			}
+			if (findHandle == new IntPtr(-1)) return;
 
 			try
 			{
 				do
 				{
-					// Get all mount points for the current volume
-					// A volume can have multiple mount points (e.g., D:\ and C:\Mounts\MyData)
 					GetVolumePathNamesForVolumeName(volumeName.ToString(), null, 0, out uint pathNamesLength);
 					if (pathNamesLength == 0) continue;
 
 					var pathNames = new char[pathNamesLength];
-					if (!GetVolumePathNamesForVolumeName(volumeName.ToString(), pathNames, pathNamesLength, out _))
-					{
-						continue;
-					}
+					if (!GetVolumePathNamesForVolumeName(volumeName.ToString(), pathNames, pathNamesLength, out _)) continue;
 
-					// The API returns a multi-string buffer (null-terminated strings, ending with a double null).
-					// We split it into individual paths.
 					string multiString = new string(pathNames).TrimEnd('\0');
 					string[] mountPoints = multiString.Split(new[] { '\0' }, StringSplitOptions.RemoveEmptyEntries);
 
 					foreach (var mountPoint in mountPoints)
 					{
-						// Check if the drive type is 'Fixed' (a hard disk)
 						if (GetDriveType(mountPoint) == DriveType.Fixed)
 						{
-							DiskLists.Add(new DiskModel(mountPoint, _disks.Contains(mountPoint)));
+							var diskModel = new DiskModel(mountPoint, _disks.Contains(mountPoint));
+
+							// A "normal" disk path is 3 chars long (e.g., "C:\").
+							// Anything longer is a mounted folder.
+							if (mountPoint.Length == 3 && mountPoint.EndsWith(@"\"))
+							{
+								normalDisksTemp.Add(diskModel);
+							}
+							else
+							{
+								mountedDisksTemp.Add(diskModel);
+							}
 						}
 					}
-
 				} while (FindNextVolume(findHandle, volumeName, MAX_PATH));
 			}
 			finally
@@ -325,6 +329,23 @@ namespace NoSleepHD.ViewModel
 					FindVolumeClose(findHandle);
 				}
 			}
+
+			// Clear existing collections and populate them with the sorted lists
+			NormalDisks.Clear();
+			MountedDisks.Clear();
+
+			foreach (var disk in normalDisksTemp.OrderBy(d => d.Path))
+			{
+				NormalDisks.Add(disk);
+			}
+
+			foreach (var disk in mountedDisksTemp.OrderBy(d => d.Path))
+			{
+				MountedDisks.Add(disk);
+			}
+
+			// Update the visibility property for the UI
+			HasMountedDisks = MountedDisks.Any();
 		}
 
 		private void LoadRegistry()
