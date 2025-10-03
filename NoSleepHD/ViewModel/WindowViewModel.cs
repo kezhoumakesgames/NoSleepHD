@@ -1,6 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using NoSleepHD.Model;
 using NoSleepHD.View;
 using NoSleepHD.Manager;
@@ -11,276 +15,353 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
-using System;
 
 namespace NoSleepHD.ViewModel
 {
-    public partial class WindowViewModel : ObservableObject
-    {
-        public ObservableCollection<DiskModel> DiskLists { get; }
-            = new ObservableCollection<DiskModel>();
+	public partial class WindowViewModel : ObservableObject
+	{
+		#region P/Invoke for Volume Enumeration
+		// We use the Windows API to find all volumes, including those mounted as folders.
 
-        [ObservableProperty]
-        private bool isStarted;
+		private const int MAX_PATH = 260;
 
-        [ObservableProperty]
-        private object content;
+		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+		private static extern IntPtr FindFirstVolume(
+			StringBuilder lpszVolumeName,
+			uint cchBufferLength);
 
-        #region For Setting
+		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+		private static extern bool FindNextVolume(
+			IntPtr hFindVolume,
+			StringBuilder lpszVolumeName,
+			uint cchBufferLength);
 
-        public List<LanguageModel> Languages
-        {
-            get
-            {
-                return LanguageCoreManager.Languages;
-            }
-        }
+		[DllImport("kernel32.dll", SetLastError = true)]
+		private static extern bool FindVolumeClose(IntPtr hFindVolume);
 
-        public LanguageModel Language
-        {
-            get
-            {
-                return LanguageManager.CurrentLanguage!;
-            }
-            set
-            {
-                LanguageManager.UpdateLanguage(value, true);
-            }
-        }
+		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+		private static extern bool GetVolumePathNamesForVolumeName(
+			string lpszVolumeName,
+			[Out] char[] lpszVolumePathNames,
+			uint cchBufferLength,
+			out uint lpcchReturnLength);
 
-        public bool OnStartup
-        {
-            get
-            {
-                return MainGlobal.TryStartupCurrent();
-            }
-            set
-            {
-                MainGlobal.TryStartupCurrent(value);
-            }
-        }
+		[DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+		private static extern DriveType GetDriveType(string lpRootPathName);
+		#endregion
 
-        public List<int> Hour
-        {
-            get
-            {
-                var hour = new List<int>();
-                for (int i = 0; i < 24; i++)
-                {
-                    hour.Add(i);
-                }
+		public ObservableCollection<DiskModel> DiskLists { get; }
+			= new ObservableCollection<DiskModel>();
 
-                return hour;
-            }
-        }
+		[ObservableProperty]
+		private bool isStarted;
 
-        public List<int> Minute
-        {
-            get
-            {
-                var minute = new List<int>();
-                for (int i = 0; i < 60; i++)
-                {
-                    minute.Add(i);
-                }
+		[ObservableProperty]
+		private object content;
 
-                return minute;
-            }
-        }
+		#region For Setting
 
-        public bool OnTiming
-        {
-            get
-            {
-                return MainGlobal.OnTiming;
-            }
-            set
-            {
-                MainGlobal.OnTiming = value;
-            }
-        }
+		public List<LanguageModel> Languages
+		{
+			get
+			{
+				return LanguageCoreManager.Languages;
+			}
+		}
 
-        public int StartHour
-        {
-            get
-            {
-                return MainGlobal.StartHour;
-            }
-            set
-            {
-                MainGlobal.StartHour = value;
-            }
-        }
+		public LanguageModel Language
+		{
+			get
+			{
+				return LanguageManager.CurrentLanguage!;
+			}
+			set
+			{
+				LanguageManager.UpdateLanguage(value, true);
+			}
+		}
 
-        public int StartMinute
-        {
-            get
-            {
-                return MainGlobal.StartMinute;
-            }
-            set
-            {
-                MainGlobal.StartMinute = value;
-            }
-        }
+		public bool OnStartup
+		{
+			get
+			{
+				return MainGlobal.TryStartupCurrent();
+			}
+			set
+			{
+				MainGlobal.TryStartupCurrent(value);
+			}
+		}
 
-        public int EndHour
-        {
-            get
-            {
-                return MainGlobal.EndHour;
-            }
-            set
-            {
-                MainGlobal.EndHour = value;
-            }
-        }
+		public List<int> Hour
+		{
+			get
+			{
+				var hour = new List<int>();
+				for (int i = 0; i < 24; i++)
+				{
+					hour.Add(i);
+				}
 
-        public int EndMinute
-        {
-            get
-            {
-                return MainGlobal.EndMinute;
-            }
-            set
-            {
-                MainGlobal.EndMinute = value;
-            }
-        }
+				return hour;
+			}
+		}
 
-        public int Interval
-        {
-            get
-            {
-                return MainGlobal.Interval;
-            }
-            set
-            {
-                MainGlobal.Interval = value;
-            }
-        }
+		public List<int> Minute
+		{
+			get
+			{
+				var minute = new List<int>();
+				for (int i = 0; i < 60; i++)
+				{
+					minute.Add(i);
+				}
 
-        #endregion
+				return minute;
+			}
+		}
 
-        private List<string> _disks = new List<string>();
+		public bool OnTiming
+		{
+			get
+			{
+				return MainGlobal.OnTiming;
+			}
+			set
+			{
+				MainGlobal.OnTiming = value;
+			}
+		}
 
-        private MainView _mainView = new MainView();
-        private SettingView _settingView = new SettingView();
+		public int StartHour
+		{
+			get
+			{
+				return MainGlobal.StartHour;
+			}
+			set
+			{
+				MainGlobal.StartHour = value;
+			}
+		}
 
-        private ISnackbarService _snackbarService;
+		public int StartMinute
+		{
+			get
+			{
+				return MainGlobal.StartMinute;
+			}
+			set
+			{
+				MainGlobal.StartMinute = value;
+			}
+		}
 
-        public WindowViewModel(ISnackbarService snackbarService)
-        {
-            _snackbarService = snackbarService;
+		public int EndHour
+		{
+			get
+			{
+				return MainGlobal.EndHour;
+			}
+			set
+			{
+				MainGlobal.EndHour = value;
+			}
+		}
 
-            IsStarted = CoreManager.IsCoreRunning();
-            Content = _mainView;
+		public int EndMinute
+		{
+			get
+			{
+				return MainGlobal.EndMinute;
+			}
+			set
+			{
+				MainGlobal.EndMinute = value;
+			}
+		}
 
-            LoadRegistry();
-            LoadSSD();
-        }
+		public int Interval
+		{
+			get
+			{
+				return MainGlobal.Interval;
+			}
+			set
+			{
+				MainGlobal.Interval = value;
+			}
+		}
 
-        [RelayCommand]
-        private void OnButton(string command)
-        {
-            switch (command)
-            {
-                case "Setting":
-                    Content = _settingView;
-                    break;
+		#endregion
 
-                case "BackToMain":
-                    Content = _mainView;
-                    break;
+		private List<string> _disks = new List<string>();
 
-                case "Switch":
+		private MainView _mainView = new MainView();
+		private SettingView _settingView = new SettingView();
 
-                    if (IsStarted)
-                    {
-                        StopDiskNoSleep();
-                        break;
-                    }
+		private ISnackbarService _snackbarService;
 
-                    if (_disks.Count == 0)
-                    {
-                        _snackbarService.Show
-                        (
-                            LanguageManager.GetStringByKey("text_warning"),
-                            LanguageManager.GetStringByKey("you_have_not_selected_any_hdd"),
-                            ControlAppearance.Caution,
-                            null,
-                            TimeSpan.FromSeconds(3)
-                        );
+		public WindowViewModel(ISnackbarService snackbarService)
+		{
+			_snackbarService = snackbarService;
 
-                        break;
-                    }
+			IsStarted = CoreManager.IsCoreRunning();
+			Content = _mainView;
 
-                    StartDiskNoSleep();
-                    break;
-            }
-        }
+			LoadRegistry();
+			LoadSSD();
+		}
 
-        [RelayCommand]
-        private void OnDiskButton(DiskModel disk)
-        {
-            if (disk.IsChecked)
-            {
-                _disks.Add(disk.Path);
-            }
-            else
-            {
-                _disks.Remove(disk.Path);
-            }
+		[RelayCommand]
+		private void OnButton(string command)
+		{
+			switch (command)
+			{
+				case "Setting":
+					Content = _settingView;
+					break;
 
-            MainGlobal.Disks = _disks.ToArray();
-        }
+				case "BackToMain":
+					Content = _mainView;
+					break;
 
-        private void LoadSSD()
-        {
-            foreach (DriveInfo drive in DriveInfo.GetDrives())
-            {
-                if (drive.DriveType == DriveType.Fixed)
-                {
-                    DiskLists.Add(new DiskModel(drive.Name, _disks.Contains(drive.Name)));
-                }
-            }
-        }
+				case "Switch":
 
-        private void LoadRegistry()
-        {
-            _disks.Clear();
-            _disks.AddRange(MainGlobal.Disks);
-        }
+					if (IsStarted)
+					{
+						StopDiskNoSleep();
+						break;
+					}
 
-        public void StartDiskNoSleep()
-        {
-            if (IsStarted)
-                return;
+					if (_disks.Count == 0)
+					{
+						_snackbarService.Show
+						(
+							LanguageManager.GetStringByKey("text_warning"),
+							LanguageManager.GetStringByKey("you_have_not_selected_any_hdd"),
+							ControlAppearance.Caution,
+							null,
+							TimeSpan.FromSeconds(3)
+						);
 
-            if (CoreManager.OpenCore())
-            {
-                IsStarted = true;
-            }
-            else
-            {
-                _snackbarService.Show
-                (
-                    LanguageManager.GetStringByKey("text_warning"),
-                    LanguageManager.GetStringByKey("text_open_core_failed"),
-                    ControlAppearance.Danger,
-                    null,
-                    TimeSpan.FromSeconds(3)
-                );
-            }
-        }
+						break;
+					}
 
-        public void StopDiskNoSleep()
-        {
-            if (!IsStarted)
-                return;
+					StartDiskNoSleep();
+					break;
+			}
+		}
 
-            CoreManager.CloseCore();
-            IsStarted = false;
-        }
-    }
+		[RelayCommand]
+		private void OnDiskButton(DiskModel disk)
+		{
+			if (disk.IsChecked)
+			{
+				if (!_disks.Contains(disk.Path))
+				{
+					_disks.Add(disk.Path);
+				}
+			}
+			else
+			{
+				_disks.Remove(disk.Path);
+			}
+
+			MainGlobal.Disks = _disks.ToArray();
+		}
+
+		/// <summary>
+		/// REFINED: This method now uses the Windows API to find all fixed-disk volumes,
+		/// including those mounted as folders without a drive letter.
+		/// </summary>
+		private void LoadSSD()
+		{
+			DiskLists.Clear();
+			var volumeName = new StringBuilder(MAX_PATH);
+			IntPtr findHandle = FindFirstVolume(volumeName, MAX_PATH);
+
+			if (findHandle == new IntPtr(-1))
+			{
+				// Could show an error message if needed
+				return;
+			}
+
+			try
+			{
+				do
+				{
+					// Get all mount points for the current volume
+					// A volume can have multiple mount points (e.g., D:\ and C:\Mounts\MyData)
+					GetVolumePathNamesForVolumeName(volumeName.ToString(), null, 0, out uint pathNamesLength);
+					if (pathNamesLength == 0) continue;
+
+					var pathNames = new char[pathNamesLength];
+					if (!GetVolumePathNamesForVolumeName(volumeName.ToString(), pathNames, pathNamesLength, out _))
+					{
+						continue;
+					}
+
+					// The API returns a multi-string buffer (null-terminated strings, ending with a double null).
+					// We split it into individual paths.
+					string multiString = new string(pathNames).TrimEnd('\0');
+					string[] mountPoints = multiString.Split(new[] { '\0' }, StringSplitOptions.RemoveEmptyEntries);
+
+					foreach (var mountPoint in mountPoints)
+					{
+						// Check if the drive type is 'Fixed' (a hard disk)
+						if (GetDriveType(mountPoint) == DriveType.Fixed)
+						{
+							DiskLists.Add(new DiskModel(mountPoint, _disks.Contains(mountPoint)));
+						}
+					}
+
+				} while (FindNextVolume(findHandle, volumeName, MAX_PATH));
+			}
+			finally
+			{
+				if (findHandle != IntPtr.Zero && findHandle != new IntPtr(-1))
+				{
+					FindVolumeClose(findHandle);
+				}
+			}
+		}
+
+		private void LoadRegistry()
+		{
+			_disks.Clear();
+			_disks.AddRange(MainGlobal.Disks);
+		}
+
+		public void StartDiskNoSleep()
+		{
+			if (IsStarted)
+				return;
+
+			if (CoreManager.OpenCore())
+			{
+				IsStarted = true;
+			}
+			else
+			{
+				_snackbarService.Show
+				(
+					LanguageManager.GetStringByKey("text_warning"),
+					LanguageManager.GetStringByKey("text_open_core_failed"),
+					ControlAppearance.Danger,
+					null,
+					TimeSpan.FromSeconds(3)
+				);
+			}
+		}
+
+		public void StopDiskNoSleep()
+		{
+			if (!IsStarted)
+				return;
+
+			CoreManager.CloseCore();
+			IsStarted = false;
+		}
+	}
 }
