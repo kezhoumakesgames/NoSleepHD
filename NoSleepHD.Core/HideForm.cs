@@ -28,21 +28,34 @@ namespace NoSleepHD.Core
             readTimer.Interval = MainGlobal.Interval * 1000;
         }
 
-        private void readTimer_Tick(object sender, EventArgs e)
-        {
-            foreach (string disk in MainGlobal.Disks)
-            {
-                try
-                {
-                    // 读取防止休眠
-                    if (Directory.Exists(disk))
-                        Directory.GetFileSystemEntries(disk);
-                }
-                catch { }
-            }
-        }
+		private void readTimer_Tick(object sender, EventArgs e)
+		{
+			foreach (string disk in MainGlobal.Disks)
+			{
+				try
+				{
+					if (Directory.Exists(disk))
+					{
+						string markerFilePath = Path.Combine(disk, MainGlobal.MarkerFileName);
 
-        private void timingTimer_Tick(object sender, EventArgs e)
+						if (File.Exists(markerFilePath))
+						{
+							// REFINED LOGIC: This is the new, low-impact keep-awake action.
+							// Updating the last access time is a metadata write, which is
+							// sufficient to bypass the OS cache and reset the drive's idle timer.
+							File.SetLastAccessTimeUtc(markerFilePath, DateTime.UtcNow);
+						}
+					}
+				}
+				catch
+				{
+					// Ignore errors (e.g., file is temporarily locked)
+					// and continue to the next disk.
+				}
+			}
+		}
+
+		private void timingTimer_Tick(object sender, EventArgs e)
         {
             if (MainGlobal.OnTiming)
             {

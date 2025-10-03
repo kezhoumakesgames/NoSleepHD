@@ -14,7 +14,9 @@ namespace NoSleepHD.Core.Global
 
         public static readonly string AppStartupPath = $"\"{AppCorePath}\" Nothing";
 
-        public static string[] Disks
+		public const string MarkerFileName = "NoSleepHD";
+
+		public static string[] Disks
         {
             get
             {

@@ -359,12 +359,31 @@ namespace NoSleepHD.ViewModel
 			if (IsStarted)
 				return;
 
+			// NEW LOGIC: Create the marker file on each selected disk
+			foreach (var diskPath in _disks)
+			{
+				try
+				{
+					string markerFilePath = Path.Combine(diskPath, MainGlobal.MarkerFileName);
+					string content = "这是一个防止硬盘休眠的文件 ——NoSleepHD";
+					File.WriteAllText(markerFilePath, content);
+				}
+				catch (Exception ex)
+				{
+					// Optionally, log or show a non-critical error that a marker file couldn't be created
+					System.Diagnostics.Debug.WriteLine($"Failed to create marker file on {diskPath}: {ex.Message}");
+				}
+			}
+
 			if (CoreManager.OpenCore())
 			{
 				IsStarted = true;
 			}
 			else
 			{
+				// If core fails to start, clean up any marker files we just created
+				StopDiskNoSleep();
+
 				_snackbarService.Show
 				(
 					LanguageManager.GetStringByKey("text_warning"),
@@ -378,7 +397,26 @@ namespace NoSleepHD.ViewModel
 
 		public void StopDiskNoSleep()
 		{
-			if (!IsStarted)
+			// Delete the marker file from all disks that might have it.
+			// We use the currently selected list of disks as the source for cleanup.
+			foreach (var diskPath in _disks)
+			{
+				try
+				{
+					string markerFilePath = Path.Combine(diskPath, MainGlobal.MarkerFileName);
+					if (File.Exists(markerFilePath))
+					{
+						File.Delete(markerFilePath);
+					}
+				}
+				catch (Exception ex)
+				{
+					// Optionally, log a non-critical error
+					System.Diagnostics.Debug.WriteLine($"Failed to delete marker file on {diskPath}: {ex.Message}");
+				}
+			}
+
+			if (!IsStarted && CoreManager.IsCoreRunning() == false) // Prevent recursion if called from StartDiskNoSleep
 				return;
 
 			CoreManager.CloseCore();
