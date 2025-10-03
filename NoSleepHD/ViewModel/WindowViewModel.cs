@@ -42,7 +42,7 @@ namespace NoSleepHD.ViewModel
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		private static extern bool GetVolumePathNamesForVolumeName(
 			string lpszVolumeName,
-			[Out] char[] lpszVolumePathNames,
+			[Out] char[]? lpszVolumePathNames,
 			uint cchBufferLength,
 			out uint lpcchReturnLength);
 
