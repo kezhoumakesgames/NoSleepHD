@@ -7,7 +7,10 @@
              mc:Ignorable="d"
              d:DesignHeight="400"
              d:DesignWidth="400">
-
+    <UserControl.Resources>
+        <!-- This converter is used to hide the mounted drives section when it's empty -->
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </UserControl.Resources>
     <DockPanel>
 
         <Grid DockPanel.Dock="Bottom">
@@ -54,30 +57,59 @@
             <ScrollViewer Margin="10"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
+                <!-- We use a StackPanel to arrange the two sections vertically -->
+                <StackPanel>
 
-                <ItemsControl ItemsSource="{Binding DiskLists}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <ToggleButton Command="{Binding DataContext.DiskButtonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          CommandParameter="{Binding}"
-                                          IsChecked="{Binding IsChecked}"
-                                          Content="{Binding Path}"
-                                          Margin="5"/>
+                    <!-- Section 1: Normal Disks -->
+                    <ItemsControl ItemsSource="{Binding NormalDisks}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <ToggleButton Command="{Binding DataContext.DiskButtonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              CommandParameter="{Binding}"
+                                              IsChecked="{Binding IsChecked}"
+                                              Content="{Binding Path}"
+                                              Margin="5"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
 
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
+                    <!-- Section 2: Mounted Disks (only visible if any exist) -->
+                    <StackPanel Visibility="{Binding HasMountedDisks, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Separator Margin="5,10" />
 
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                        <TextBlock
+                            Text="{DynamicResource text_mounted_drives}"
+                            FontWeight="SemiBold"
+                            Margin="5,0,0,5"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
+                        <ItemsControl ItemsSource="{Binding MountedDisks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <ToggleButton Command="{Binding DataContext.DiskButtonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  CommandParameter="{Binding}"
+                                                  IsChecked="{Binding IsChecked}"
+                                                  Content="{Binding Path}"
+                                                  Margin="5"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+
+                </StackPanel>
             </ScrollViewer>
 
             <Separator VerticalAlignment="Bottom" />
-
         </Grid>
 
     </DockPanel>
